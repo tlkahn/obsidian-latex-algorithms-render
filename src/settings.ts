@@ -155,7 +155,7 @@ export class LatexAlgoSettingTab extends PluginSettingTab {
         button
           .setButtonText("Flush cache")
           .onClick(() => {
-            console.log("[LaTeX Algorithms Render] Flush cache requested (not yet implemented)");
+            this.plugin.flushCache();
           })
       );
 
