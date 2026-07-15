@@ -28,14 +28,6 @@ class CompilingWidget extends WidgetType {
     const div = document.createElement("div");
     div.className = "latex-algo-compiling";
     div.textContent = "Rendering LaTeX algorithm...";
-    div.style.cssText = `
-      padding: 12px 16px;
-      background: var(--background-secondary);
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-style: italic;
-      text-align: center;
-    `;
     return div;
   }
 }
@@ -48,21 +40,11 @@ class ImageWidget extends WidgetType {
   toDOM(): HTMLElement {
     const container = document.createElement("div");
     container.className = "latex-algo-image-container";
-    container.style.cssText = `
-      padding: 8px 0;
-      display: flex;
-      justify-content: center;
-    `;
 
     const img = document.createElement("img");
     img.className = "latex-algo-rendered";
     img.src = `file://${this.imagePath}`;
     img.alt = "Rendered LaTeX algorithm";
-    img.style.cssText = `
-      max-width: 100%;
-      height: auto;
-      border-radius: 4px;
-    `;
 
     // Set explicit dimensions from natural size once loaded
     img.addEventListener("load", () => {
@@ -83,16 +65,6 @@ class ErrorWidget extends WidgetType {
   toDOM(): HTMLElement {
     const div = document.createElement("div");
     div.className = "latex-algo-error";
-    div.style.cssText = `
-      padding: 12px 16px;
-      background: var(--background-modifier-error, #fdd);
-      border-radius: 6px;
-      color: var(--text-error, #c00);
-      font-family: var(--font-monospace);
-      font-size: 12px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    `;
     div.textContent = this.message;
     return div;
   }
@@ -100,10 +72,20 @@ class ErrorWidget extends WidgetType {
 
 // ---- ViewPlugin factory ----
 
+/**
+ * Create a CodeMirror 6 ViewPlugin that replaces ` ```latex-algorithm` code blocks
+ * with rendered images in Live Preview mode.
+ *
+ * @param detector            Block detector instance.
+ * @param pipeline            Rendering pipeline.
+ * @param getOptions          Function returning current render options.
+ * @param showRawByDefault    Function returning whether to always show raw code.
+ */
 export function createAlgorithmViewPlugin(
   detector: BlockDetector,
   pipeline: RenderPipeline,
-  getOptions: () => RenderOptions
+  getOptions: () => RenderOptions,
+  showRawByDefault: () => boolean
 ) {
   return ViewPlugin.fromClass(
     class AlgorithmRenderPluginInstance {
@@ -111,6 +93,7 @@ export function createAlgorithmViewPlugin(
       private blockStates = new Map<string, BlockStateEntry>();
       private pending = new Set<string>();
       private docVersion = 0;
+      private debounceTimer: number | null = null;
 
       constructor(private view: EditorView) {
         this.decorations = Decoration.none;
@@ -131,22 +114,46 @@ export function createAlgorithmViewPlugin(
           }
         }
 
+        // Always recompute on doc/viewport/effect changes
+        if (update.docChanged || update.viewportChanged) {
+          if (this.debounceTimer !== null) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
+          }
+          if (update.docChanged) {
+            this.docVersion++;
+          }
+          this.recompute();
+          return;
+        }
+
+        // Debounce cursor-only updates at 50ms (Section 9.1)
+        if (update.selectionSet) {
+          if (this.debounceTimer !== null) {
+            clearTimeout(this.debounceTimer);
+          }
+          this.debounceTimer = window.setTimeout(() => {
+            this.debounceTimer = null;
+            this.recompute();
+          }, 50);
+          return;
+        }
+
+        // Also recompute if a state effect arrived on its own
         if (
-          update.docChanged ||
-          update.viewportChanged ||
-          update.selectionSet ||
           update.transactions.some((tr) =>
             tr.effects.some((e) => e.is(updateBlockEffect))
           )
         ) {
-          if (update.docChanged) {
-            this.docVersion++;
-          }
           this.recompute();
         }
       }
 
       destroy() {
+        if (this.debounceTimer !== null) {
+          clearTimeout(this.debounceTimer);
+          this.debounceTimer = null;
+        }
         // Pending compilations are abandoned -- the pipeline's concurrency
         // guard handles orphaned promises gracefully.
         this.pending.clear();
@@ -156,23 +163,52 @@ export function createAlgorithmViewPlugin(
 
       private recompute(): void {
         const doc = this.view.state.doc.toString();
-        const blocks = detector.findAll(doc);
+        const allBlocks = detector.findAll(doc);
+        const viewport = this.view.viewport;
         const widgets: Range<Decoration>[] = [];
+        const rawByDefault = showRawByDefault();
 
-        for (const block of blocks) {
+        for (const block of allBlocks) {
           const blockId = `${block.fromLine}-${block.toLine}`;
+          const fromPos = this.view.state.doc.line(block.fromLine + 1).from;
+          const toPos = this.view.state.doc.line(block.toLine + 1).to;
+
+          // VIEWPORT FILTERING (Section 9.2): skip off-screen blocks to
+          // avoid starting compilations the user cannot see yet.
+          const isOffScreen = toPos < viewport.from || fromPos > viewport.to;
+
           const cursorInside = this.isAnyCursorInBlock(block);
 
-          if (cursorInside) {
-            // RAW MODE -- no decoration, let raw code show through
+          // Show raw code if: cursor is inside, OR showRawByDefault is on
+          if (rawByDefault || cursorInside) {
             this.blockStates.set(blockId, {
               state: { kind: "raw" },
               sourceVersion: this.docVersion,
             });
+            // Even in raw mode, preserve any existing ready image for off-screen blocks
+            if (isOffScreen) {
+              const entry = this.blockStates.get(blockId);
+              if (entry && entry.state.kind === "raw") {
+                // Check if we previously had a ready state we can keep
+                // (nothing to render on-screen, so skip decoration)
+              }
+            }
             continue;
           }
 
-          // RENDER MODE
+          // RENDER MODE -- skip if off-screen (defer compilation until scrolled into view)
+          if (isOffScreen) {
+            // Keep existing ready results cached in memory but don't start work
+            const existing = this.blockStates.get(blockId);
+            if (existing && (existing.state.kind === "ready" || existing.state.kind === "error")) {
+              // Show ready/error even off-screen (cheap -- no compilation needed)
+              const widget = this.widgetForState(existing.state);
+              widgets.push(Decoration.replace({ widget }).range(fromPos, toPos));
+            }
+            continue;
+          }
+
+          // Block IS on-screen -- manage state normally
           let entry = this.blockStates.get(blockId);
 
           // Start compilation if: new block, or source changed, or was in raw mode
@@ -191,13 +227,11 @@ export function createAlgorithmViewPlugin(
 
           // Build widget from current state
           const widget = this.widgetForState(entry.state);
-          const from = this.view.state.doc.line(block.fromLine + 1).from;
-          const to = this.view.state.doc.line(block.toLine + 1).to;
-          widgets.push(Decoration.replace({ widget }).range(from, to));
+          widgets.push(Decoration.replace({ widget }).range(fromPos, toPos));
         }
 
         // Prune stale states for blocks that no longer exist
-        this.pruneStaleStates(blocks);
+        this.pruneStaleStates(allBlocks);
 
         this.decorations = Decoration.set(widgets, true);
       }

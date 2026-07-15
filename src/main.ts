@@ -4,10 +4,14 @@ import { tmpdir } from "os";
 import { LatexAlgoSettings, DEFAULT_SETTINGS, LatexAlgoSettingTab } from "./settings";
 import { BlockDetector, DefaultBlockDetector } from "./editor/block-detector";
 import { createAlgorithmViewPlugin } from "./editor/live-preview";
+import { createReadingViewPostProcessor } from "./editor/reading-view";
 import { ProcessRunner, DefaultProcessRunner } from "./utils/process";
 import { TempDirManager, DefaultTempDirManager } from "./utils/tempdir";
 import { CacheManager } from "./render/cache";
 import { RenderPipeline, RenderOptions } from "./render/pipeline";
+
+/** How often to run automatic cache cleanup (milliseconds). */
+const CACHE_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 export default class LatexAlgoRenderPlugin extends Plugin {
   settings: LatexAlgoSettings;
@@ -16,6 +20,7 @@ export default class LatexAlgoRenderPlugin extends Plugin {
   tempDirManager: TempDirManager;
   cache: CacheManager;
   pipeline: RenderPipeline;
+  private cleanupTimer: number | null = null;
 
   async onload() {
     console.log("[LaTeX Algorithms Render] Loading plugin...");
@@ -39,12 +44,27 @@ export default class LatexAlgoRenderPlugin extends Plugin {
     // Run cache TTL cleanup on load
     this.runCacheCleanup();
 
+    // Periodic cache eviction (Section 9.5)
+    this.cleanupTimer = window.setInterval(() => {
+      this.runCacheCleanup();
+    }, CACHE_CLEANUP_INTERVAL);
+
     // Register Live Preview ViewPlugin
     this.registerEditorExtension(
       createAlgorithmViewPlugin(
         this.blockDetector,
         this.pipeline,
-        () => this.getRenderOptions()
+        () => this.getRenderOptions(),
+        () => this.settings.showRawByDefault
+      )
+    );
+
+    // Register Reading View post-processor
+    this.registerMarkdownPostProcessor(
+      createReadingViewPostProcessor(
+        this.pipeline,
+        () => this.getRenderOptions(),
+        () => this.settings.showRawByDefault
       )
     );
 
@@ -55,6 +75,11 @@ export default class LatexAlgoRenderPlugin extends Plugin {
   }
 
   onunload() {
+    // Clear periodic cleanup timer
+    if (this.cleanupTimer !== null) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
     console.log("[LaTeX Algorithms Render] Plugin unloaded.");
   }
 

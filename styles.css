@@ -1,2 +1,70 @@
 /* LaTeX Algorithms Render - styles */
-/* Phase 1: skeleton only. Styles added in later phases. */
+
+/* ---- Live Preview ---- */
+
+/* Placeholder shown while LaTeX compiles */
+.latex-algo-compiling {
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+/* Container around the rendered image */
+.latex-algo-image-container {
+  padding: 8px 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* The rendered algorithm image */
+.latex-algo-rendered {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Inline error message (Live Preview) */
+.latex-algo-error {
+  padding: 12px 16px;
+  background: var(--background-modifier-error, #fdd);
+  border-radius: 6px;
+  color: var(--text-error, #c00);
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Reading View ---- */
+
+.latex-algo-reading-placeholder {
+  padding: 12px 16px;
+  margin: 8px 0;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.latex-algo-reading-image {
+  padding: 8px 0;
+  margin: 8px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.latex-algo-reading-error {
+  padding: 12px 16px;
+  margin: 8px 0;
+  background: var(--background-modifier-error, #fdd);
+  border-radius: 6px;
+  color: var(--text-error, #c00);
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
