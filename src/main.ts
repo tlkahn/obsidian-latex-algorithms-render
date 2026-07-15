@@ -42,11 +42,13 @@ export default class LatexAlgoRenderPlugin extends Plugin {
     );
 
     // Run cache TTL cleanup on load
-    this.runCacheCleanup();
+    await this.runCacheCleanup();
 
-    // Periodic cache eviction (Section 9.5)
+    // Periodic cache eviction
     this.cleanupTimer = window.setInterval(() => {
-      this.runCacheCleanup();
+      this.runCacheCleanup().catch((err) =>
+        console.warn("[LaTeX Algorithms Render] Cache cleanup error:", err)
+      );
     }, CACHE_CLEANUP_INTERVAL);
 
     // Register Live Preview ViewPlugin
@@ -55,7 +57,8 @@ export default class LatexAlgoRenderPlugin extends Plugin {
         this.blockDetector,
         this.pipeline,
         () => this.getRenderOptions(),
-        () => this.settings.showRawByDefault
+        () => this.settings.showRawByDefault,
+        (p) => this.resolveImageSrc(p)
       )
     );
 
@@ -64,7 +67,8 @@ export default class LatexAlgoRenderPlugin extends Plugin {
       createReadingViewPostProcessor(
         this.pipeline,
         () => this.getRenderOptions(),
-        () => this.settings.showRawByDefault
+        () => this.settings.showRawByDefault,
+        (p) => this.resolveImageSrc(p)
       )
     );
 
@@ -112,6 +116,19 @@ export default class LatexAlgoRenderPlugin extends Plugin {
     };
   }
 
+  resolveImageSrc(absolutePath: string): string {
+    const adapter = this.app.vault.adapter;
+    if (adapter instanceof FileSystemAdapter) {
+      const vaultBase = adapter.getBasePath();
+      if (absolutePath.startsWith(vaultBase)) {
+        let relative = absolutePath.slice(vaultBase.length);
+        if (relative.startsWith("/")) relative = relative.slice(1);
+        return adapter.getResourcePath(relative);
+      }
+    }
+    return `file://${absolutePath}`;
+  }
+
   // ---- private ----
 
   private resolveCacheDir(): string {
@@ -131,9 +148,9 @@ export default class LatexAlgoRenderPlugin extends Plugin {
     return join(tmpdir(), "latex-algo-cache");
   }
 
-  private runCacheCleanup(): void {
+  private async runCacheCleanup(): Promise<void> {
     try {
-      this.cache.cleanup(this.settings.cacheTTL);
+      await this.cache.cleanupAsync(this.settings.cacheTTL);
     } catch (err) {
       console.warn("[LaTeX Algorithms Render] Cache cleanup error:", err);
     }

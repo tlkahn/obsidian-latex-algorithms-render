@@ -76,7 +76,7 @@ export class RenderPipeline {
     const cacheKey = `${hash}_${options.dpi}_${options.padding}`;
 
     // 1. Cache hit fast path
-    const cached = this.cache.get(source, options.dpi, options.padding);
+    const cached = this.cache.getByHash(hash, options.dpi, options.padding);
     if (cached) {
       return { imagePath: cached, sourceHash: hash, fromCache: true };
     }
@@ -138,7 +138,6 @@ export class RenderPipeline {
             timeout: options.compileTimeout,
           });
         } catch (err) {
-          // catch "Command not found" from ProcessRunner
           throw new PipelineError(
             "missing_command",
             `pdflatex is not installed or not found on PATH. Please install TeX Live / MacTeX.`,
@@ -147,7 +146,7 @@ export class RenderPipeline {
         }
 
         if (result.exitCode !== 0) {
-          cleanupTemp = false; // preserve temp dir for debugging
+          cleanupTemp = false;
           if (result.exitCode === -1) {
             throw new PipelineError(
               "timeout",
@@ -191,8 +190,8 @@ export class RenderPipeline {
       }
 
       // 3e. Store in persistent cache
-      const cachedPath = this.cache.store(
-        source,
+      const cachedPath = this.cache.storeByHash(
+        hash,
         options.dpi,
         options.padding,
         croppedPngPath
@@ -203,6 +202,9 @@ export class RenderPipeline {
         sourceHash: hash,
         fromCache: false,
       };
+    } catch (err) {
+      if (err instanceof PipelineError) throw err;
+      throw new PipelineError("unknown", (err as Error).message);
     } finally {
       if (cleanupTemp) {
         await this.tempDirManager.cleanup(tempDir);

@@ -41,48 +41,42 @@ export class LatexAlgoSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("DPI")
       .setDesc("Rendering resolution (50 - 600)")
-      .addText((text) =>
-        text
-          .setPlaceholder("200")
-          .setValue(String(this.plugin.settings.dpi))
+      .addSlider((slider) =>
+        slider
+          .setLimits(50, 600, 10)
+          .setValue(this.plugin.settings.dpi)
+          .setDynamicTooltip()
           .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            if (!isNaN(num) && num >= 50 && num <= 600) {
-              this.plugin.settings.dpi = num;
-              await this.plugin.saveSettings();
-            }
+            this.plugin.settings.dpi = value;
+            await this.plugin.saveSettings();
           })
       );
 
     new Setting(containerEl)
       .setName("Padding")
       .setDesc("Extra padding (px) after auto-crop (0 - 100)")
-      .addText((text) =>
-        text
-          .setPlaceholder("10")
-          .setValue(String(this.plugin.settings.padding))
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.padding)
+          .setDynamicTooltip()
           .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            if (!isNaN(num) && num >= 0 && num <= 100) {
-              this.plugin.settings.padding = num;
-              await this.plugin.saveSettings();
-            }
+            this.plugin.settings.padding = value;
+            await this.plugin.saveSettings();
           })
       );
 
     new Setting(containerEl)
       .setName("Compile timeout")
       .setDesc("Max seconds to wait for pdflatex (5 - 120)")
-      .addText((text) =>
-        text
-          .setPlaceholder("30")
-          .setValue(String(this.plugin.settings.compileTimeout))
+      .addSlider((slider) =>
+        slider
+          .setLimits(5, 120, 5)
+          .setValue(this.plugin.settings.compileTimeout)
+          .setDynamicTooltip()
           .onChange(async (value) => {
-            const num = parseInt(value, 10);
-            if (!isNaN(num) && num >= 5 && num <= 120) {
-              this.plugin.settings.compileTimeout = num;
-              await this.plugin.saveSettings();
-            }
+            this.plugin.settings.compileTimeout = value;
+            await this.plugin.saveSettings();
           })
       );
 
@@ -119,7 +113,7 @@ export class LatexAlgoSettingTab extends PluginSettingTab {
     // --- Cache section ---
     containerEl.createEl("h3", { text: "Cache" });
 
-    new Setting(containerEl)
+    const cacheTTLSetting = new Setting(containerEl)
       .setName("Cache TTL")
       .setDesc("Max age of cached images in hours (1 - 8760)")
       .addText((text) =>
@@ -131,6 +125,9 @@ export class LatexAlgoSettingTab extends PluginSettingTab {
             if (!isNaN(num) && num >= 1 && num <= 8760) {
               this.plugin.settings.cacheTTL = num;
               await this.plugin.saveSettings();
+              cacheTTLSetting.setDesc("Max age of cached images in hours (1 - 8760)");
+            } else {
+              cacheTTLSetting.setDesc("Invalid: enter a number between 1 and 8760");
             }
           })
       );

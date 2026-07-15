@@ -23,17 +23,24 @@ const updateBlockEffect = StateEffect.define<{ blockId: string; newState: BlockS
 
 // ---- Widget types ----
 
-class CompilingWidget extends WidgetType {
+export class CompilingWidget extends WidgetType {
   toDOM(): HTMLElement {
     const div = document.createElement("div");
     div.className = "latex-algo-compiling";
     div.textContent = "Rendering LaTeX algorithm...";
     return div;
   }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof CompilingWidget;
+  }
 }
 
-class ImageWidget extends WidgetType {
-  constructor(readonly imagePath: string) {
+export class ImageWidget extends WidgetType {
+  constructor(
+    readonly imagePath: string,
+    private resolveImageSrc: (path: string) => string
+  ) {
     super();
   }
 
@@ -43,10 +50,9 @@ class ImageWidget extends WidgetType {
 
     const img = document.createElement("img");
     img.className = "latex-algo-rendered";
-    img.src = `file://${this.imagePath}`;
+    img.src = this.resolveImageSrc(this.imagePath);
     img.alt = "Rendered LaTeX algorithm";
 
-    // Set explicit dimensions from natural size once loaded
     img.addEventListener("load", () => {
       img.style.width = `${img.naturalWidth}px`;
       img.style.height = `${img.naturalHeight}px`;
@@ -55,9 +61,13 @@ class ImageWidget extends WidgetType {
     container.appendChild(img);
     return container;
   }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof ImageWidget && other.imagePath === this.imagePath;
+  }
 }
 
-class ErrorWidget extends WidgetType {
+export class ErrorWidget extends WidgetType {
   constructor(readonly message: string) {
     super();
   }
@@ -67,6 +77,10 @@ class ErrorWidget extends WidgetType {
     div.className = "latex-algo-error";
     div.textContent = this.message;
     return div;
+  }
+
+  eq(other: WidgetType): boolean {
+    return other instanceof ErrorWidget && other.message === this.message;
   }
 }
 
@@ -85,7 +99,8 @@ export function createAlgorithmViewPlugin(
   detector: BlockDetector,
   pipeline: RenderPipeline,
   getOptions: () => RenderOptions,
-  showRawByDefault: () => boolean
+  showRawByDefault: () => boolean,
+  resolveImageSrc: (path: string) => string
 ) {
   return ViewPlugin.fromClass(
     class AlgorithmRenderPluginInstance {
@@ -185,14 +200,6 @@ export function createAlgorithmViewPlugin(
               state: { kind: "raw" },
               sourceVersion: this.docVersion,
             });
-            // Even in raw mode, preserve any existing ready image for off-screen blocks
-            if (isOffScreen) {
-              const entry = this.blockStates.get(blockId);
-              if (entry && entry.state.kind === "raw") {
-                // Check if we previously had a ready state we can keep
-                // (nothing to render on-screen, so skip decoration)
-              }
-            }
             continue;
           }
 
@@ -257,6 +264,7 @@ export function createAlgorithmViewPlugin(
         try {
           const result = await pipeline.render(block.source, getOptions());
           newState = { kind: "ready", imagePath: result.imagePath };
+          console.debug("[LaTeX Algorithms Render] Compiled block", blockId, "->", result.imagePath);
         } catch (err) {
           const message =
             err instanceof PipelineError
@@ -265,6 +273,7 @@ export function createAlgorithmViewPlugin(
                 ? err.message
                 : "Unknown rendering error";
           newState = { kind: "error", message };
+          console.warn("[LaTeX Algorithms Render] Block", blockId, "failed:", message);
         } finally {
           this.pending.delete(blockId);
         }
@@ -280,7 +289,7 @@ export function createAlgorithmViewPlugin(
           case "compiling":
             return new CompilingWidget();
           case "ready":
-            return new ImageWidget(state.imagePath);
+            return new ImageWidget(state.imagePath, resolveImageSrc);
           case "error":
             return new ErrorWidget(state.message);
           default:

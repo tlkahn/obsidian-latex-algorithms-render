@@ -6,6 +6,7 @@ import {
   statSync,
   unlinkSync,
 } from "fs";
+import { readdir, stat, unlink } from "fs/promises";
 import { join } from "path";
 import { sha256 } from "../utils/hash";
 
@@ -74,6 +75,24 @@ export class CacheManager {
     return dest;
   }
 
+  cacheKeyFromHash(hash: string, dpi: number, padding: number): string {
+    return `${hash}_${dpi}_${padding}.png`;
+  }
+
+  getByHash(hash: string, dpi: number, padding: number): string | null {
+    const key = this.cacheKeyFromHash(hash, dpi, padding);
+    const p = this.cachePath(key);
+    return existsSync(p) ? p : null;
+  }
+
+  storeByHash(hash: string, dpi: number, padding: number, imagePath: string): string {
+    const key = this.cacheKeyFromHash(hash, dpi, padding);
+    const dest = this.cachePath(key);
+    this.ensureCacheDir();
+    copyFileSync(imagePath, dest);
+    return dest;
+  }
+
   /**
    * Remove all cached images.
    * Returns the number of files removed.
@@ -110,6 +129,25 @@ export class CacheManager {
         const st = statSync(fullPath);
         if (now - st.mtimeMs > maxAgeMs) {
           unlinkSync(fullPath);
+        }
+      } catch {
+        // Ignore -- file may have been deleted concurrently
+      }
+    }
+  }
+
+  async cleanupAsync(maxAgeHours: number): Promise<void> {
+    if (!existsSync(this.cacheDir)) return;
+    const now = Date.now();
+    const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+    const entries = await readdir(this.cacheDir);
+    for (const entry of entries) {
+      if (!entry.endsWith(".png")) continue;
+      const fullPath = join(this.cacheDir, entry);
+      try {
+        const st = await stat(fullPath);
+        if (now - st.mtimeMs > maxAgeMs) {
+          await unlink(fullPath);
         }
       } catch {
         // Ignore -- file may have been deleted concurrently

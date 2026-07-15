@@ -27,11 +27,10 @@ export function writeLatexFile(texPath: string, content: string): void {
 }
 
 /**
- * Get the absolute path to pdflatex.
- * Checks common installation locations and PATH.
+ * Return the pdflatex command name, resolved via PATH by execFile.
  */
 export function getPdflatexPath(): string {
-  return "pdflatex"; // Resolved via PATH by execFile
+  return "pdflatex";
 }
 
 /**
@@ -51,6 +50,7 @@ export interface LatexErrorInfo {
 export function parseLatexError(stderr: string): LatexErrorInfo {
   const lines = stderr.split("\n");
   const errorLines: string[] = [];
+  const MAX_ERROR_CONTEXT_LINES = 15;
   let inError = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -60,8 +60,7 @@ export function parseLatexError(stderr: string): LatexErrorInfo {
     }
     if (inError) {
       errorLines.push(line);
-      // Capture ~5 lines of context after the error
-      if (errorLines.length >= 5) {
+      if (errorLines.length >= MAX_ERROR_CONTEXT_LINES) {
         break;
       }
     }

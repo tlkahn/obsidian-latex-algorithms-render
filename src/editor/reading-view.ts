@@ -1,4 +1,4 @@
-import { MarkdownPostProcessor } from "obsidian";
+import { MarkdownPostProcessor, MarkdownPostProcessorContext } from "obsidian";
 import { RenderPipeline, RenderOptions, PipelineError } from "../render/pipeline";
 
 /**
@@ -13,9 +13,10 @@ import { RenderPipeline, RenderOptions, PipelineError } from "../render/pipeline
 export function createReadingViewPostProcessor(
   pipeline: RenderPipeline,
   getOptions: () => RenderOptions,
-  showRawByDefault: () => boolean
+  showRawByDefault: () => boolean,
+  resolveImageSrc: (path: string) => string
 ): MarkdownPostProcessor {
-  return (el: HTMLElement, _ctx: unknown): void => {
+  return (el: HTMLElement, _ctx: MarkdownPostProcessorContext): void => {
     // If user prefers raw code always, skip entirely
     if (showRawByDefault()) return;
 
@@ -43,7 +44,7 @@ export function createReadingViewPostProcessor(
         .render(source, options)
         .then((result) => {
           if (!placeholder.isConnected) return; // view was torn down
-          const img = createImageElement(result.imagePath);
+          const img = createImageElement(result.imagePath, resolveImageSrc);
           placeholder.replaceWith(img);
         })
         .catch((err) => {
@@ -70,13 +71,13 @@ function createPlaceholder(): HTMLElement {
   return div;
 }
 
-function createImageElement(imagePath: string): HTMLElement {
+function createImageElement(imagePath: string, resolveImageSrc: (path: string) => string): HTMLElement {
   const container = document.createElement("div");
   container.className = "latex-algo-reading-image";
 
   const img = document.createElement("img");
   img.className = "latex-algo-rendered";
-  img.src = `file://${imagePath}`;
+  img.src = resolveImageSrc(imagePath);
   img.alt = "Rendered LaTeX algorithm";
 
   // Set explicit dimensions from natural size once loaded

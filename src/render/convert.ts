@@ -49,6 +49,11 @@ export async function convertToPng(
         const pagePath = join(dir, `${stem}-1.png`);
         if (existsSync(pagePath)) {
           renameSync(pagePath, pngPath);
+          if (existsSync(join(dir, `${stem}-2.png`))) {
+            console.warn(
+              "[LaTeX Algorithms Render] pdftoppm produced multiple pages; only the first page is used."
+            );
+          }
           return;
         }
       }
