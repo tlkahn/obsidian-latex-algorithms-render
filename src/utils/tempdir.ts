@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, existsSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+
 export interface TempDirManager {
   /** Create a temporary directory for LaTeX compilation artifacts */
   create(): Promise<string>;
@@ -7,9 +11,12 @@ export interface TempDirManager {
 
 export class DefaultTempDirManager implements TempDirManager {
   async create(): Promise<string> {
-    throw new Error("TempDirManager.create not yet implemented (Phase 2)");
+    return mkdtempSync(join(tmpdir(), "latex-algo-"));
   }
-  async cleanup(_dir: string): Promise<void> {
-    throw new Error("TempDirManager.cleanup not yet implemented (Phase 2)");
+
+  async cleanup(dir: string): Promise<void> {
+    if (dir && existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 }
