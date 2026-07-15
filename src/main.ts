@@ -3,6 +3,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { LatexAlgoSettings, DEFAULT_SETTINGS, LatexAlgoSettingTab } from "./settings";
 import { BlockDetector, DefaultBlockDetector } from "./editor/block-detector";
+import { createAlgorithmViewPlugin } from "./editor/live-preview";
 import { ProcessRunner, DefaultProcessRunner } from "./utils/process";
 import { TempDirManager, DefaultTempDirManager } from "./utils/tempdir";
 import { CacheManager } from "./render/cache";
@@ -37,6 +38,15 @@ export default class LatexAlgoRenderPlugin extends Plugin {
 
     // Run cache TTL cleanup on load
     this.runCacheCleanup();
+
+    // Register Live Preview ViewPlugin
+    this.registerEditorExtension(
+      createAlgorithmViewPlugin(
+        this.blockDetector,
+        this.pipeline,
+        () => this.getRenderOptions()
+      )
+    );
 
     // Settings tab
     this.addSettingTab(new LatexAlgoSettingTab(this.app, this));

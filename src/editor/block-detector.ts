@@ -24,11 +24,55 @@ export interface BlockDetector {
 }
 
 export class DefaultBlockDetector implements BlockDetector {
-  findAll(_doc: string): CodeBlockRange[] {
-    throw new Error("BlockDetector.findAll not yet implemented (Phase 2)");
+  /**
+   * Regex for matching an opening code fence with a `latex-algorithm`
+   * language tag (or variant like `latex-algorithmic`, `latex-algo`, etc.).
+   */
+  private static FENCE_RE = /^```(\S+)$/;
+  private static CLOSING_RE = /^```/;
+
+  findAll(doc: string): CodeBlockRange[] {
+    const lines = doc.split("\n");
+    const blocks: CodeBlockRange[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const match = line.match(DefaultBlockDetector.FENCE_RE);
+
+      if (match && match[1].startsWith("latex-algorithm")) {
+        const fromLine = i;
+        const language = match[1];
+        i++; // move past opening fence
+
+        const sourceLines: string[] = [];
+        while (i < lines.length) {
+          if (DefaultBlockDetector.CLOSING_RE.test(lines[i])) {
+            break;
+          }
+          sourceLines.push(lines[i]);
+          i++;
+        }
+
+        const toLine = i; // closing fence (or last line if unclosed)
+
+        blocks.push({
+          fromLine,
+          toLine,
+          source: sourceLines.join("\n"),
+          language,
+        });
+      }
+
+      i++;
+    }
+
+    return blocks;
   }
 
-  findBlockAtLine(_doc: string, _line: number): CodeBlockRange | null {
-    throw new Error("BlockDetector.findBlockAtLine not yet implemented (Phase 2)");
+  findBlockAtLine(doc: string, line: number): CodeBlockRange | null {
+    return this.findAll(doc).find(
+      (b) => line >= b.fromLine && line <= b.toLine
+    ) || null;
   }
 }
