@@ -1,0 +1,10 @@
+{
+  "id": "latex-algorithms-render",
+  "name": "LaTeX Algorithms Render",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Render latex-algorithm code blocks as images. Shows raw code when cursor is inside the block.",
+  "author": "",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
